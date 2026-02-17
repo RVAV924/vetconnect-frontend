@@ -1,34 +1,43 @@
 import React, { useState } from 'react';
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Login from './Login';
 import Dashboard from './dashboard';
-import AdminDashboard from './admindashboard'; // Siguraduhin na naka-import ito
+import AdminDashboard from './admindashboard';
+import EmailVerification from './EmailVerification';
+import VerificationSuccess from './VerificationSuccess';
 
 function App() {
-  // Ang state ngayon ay pwedeng: null (hindi pa login), 'user', o 'admin'
   const [userRole, setUserRole] = useState(null);
 
-  // Bagong handleLogin na tumatanggap ng role galing sa Login.jsx
-  const handleLogin = (role) => {
-    setUserRole(role); // Itatakda nito kung 'user' o 'admin'
-  };
-
-  const handleLogout = () => {
-    setUserRole(null); // Babalik sa login screen
-  };
+  const handleLogin  = (role) => setUserRole(role);
+  const handleLogout = ()     => setUserRole(null);
 
   return (
-    <div>
-      {!userRole ? (
-        // 1. Kapag NULL, ipakita ang Login page
-        <Login onLogin={handleLogin} />
-      ) : userRole === 'admin' ? (
-        // 2. Kapag 'admin', ipakita ang Admin Dashboard
-        <AdminDashboard onLogout={handleLogout} />
-      ) : (
-        // 3. Kapag 'user' (o kahit ano pa), ipakita ang regular Dashboard
-        <Dashboard onLogout={handleLogout} />
-      )}
-    </div>
+    <BrowserRouter>
+      <Routes>
+
+        {/* Page 1: Show after signup — "Check your email" */}
+        <Route path="/verify-email" element={<EmailVerification />} />
+
+        {/* Page 2: Backend redirects here after clicking email link */}
+        <Route path="/verify-success" element={<VerificationSuccess />} />
+
+        {/* Main app */}
+        <Route
+          path="/*"
+          element={
+            !userRole ? (
+              <Login onLogin={handleLogin} />
+            ) : userRole === 'admin' ? (
+              <AdminDashboard onLogout={handleLogout} />
+            ) : (
+              <Dashboard onLogout={handleLogout} />
+            )
+          }
+        />
+
+      </Routes>
+    </BrowserRouter>
   );
 }
 

@@ -2,7 +2,7 @@ import React,
 { useState, useRef, useEffect } from 'react';
 import { 
   Menu, SquarePen, Calendar, MessageCircleQuestion, 
-  User, Send, LogOut, ArrowDown 
+  User, Send, LogOut, ArrowDown, Camera, X
 } from 'lucide-react';
 import logoImg from './assets/logo.png';
 
@@ -27,6 +27,12 @@ const modalStyles = `
   }
   .animate-scaleIn {
     animation: scaleIn 0.2s ease-out;
+  }
+  button, [role="button"], label[for], label:has(input) {
+    cursor: pointer;
+  }
+  button:disabled {
+    cursor: not-allowed;
   }
 `;
 
@@ -92,6 +98,19 @@ const Dashboard = ({ onLogout }) => {
   const [showRescheduler, setShowRescheduler] = useState(false);
   const [rescheduleDate, setRescheduleDate] = useState('');
   const [rescheduleTime, setRescheduleTime] = useState('');
+
+  // --- PROFILE STATES ---
+  const [showProfilePopup, setShowProfilePopup] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [profileData, setProfileData] = useState({
+    displayName: 'Alice Gong',
+    username: '@alice.gong',
+    avatarUrl: null,
+  });
+  const [editForm, setEditForm] = useState({ ...profileData });
+  const [avatarError, setAvatarError] = useState('');
+  const profileRef = useRef(null);
+  const profileBtnRef = useRef(null);
   
   const messagesEndRef = useRef(null);
   const mainContainerRef = useRef(null);
@@ -230,6 +249,46 @@ const Dashboard = ({ onLogout }) => {
     }
   };
 
+  // --- PROFILE FUNCTIONS ---
+  const getInitials = (name) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+  };
+
+  const handleAvatarChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setAvatarError('');
+
+    // File type validation — jpg/png only
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      setAvatarError('Only JPG or PNG files are allowed.');
+      return;
+    }
+    // File size validation — max 5MB
+    if (file.size > 5 * 1024 * 1024) {
+      setAvatarError('Image must be under 5MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setEditForm(prev => ({ ...prev, avatarUrl: ev.target.result }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSaveProfile = () => {
+    setProfileData({ ...editForm });
+    setShowEditModal(false);
+  };
+
+  const handleCancelEdit = () => {
+    setEditForm({ ...profileData });
+    setAvatarError('');
+    setShowEditModal(false);
+  };
+
   const getFilteredAppointments = () => {
     let filtered = appointments.filter(apt => apt.status === appointmentFilter);
     
@@ -241,6 +300,21 @@ const Dashboard = ({ onLogout }) => {
     
     return filtered;
   };
+
+  // Close profile popup when clicking outside
+  const profilePopupRef = useRef(null);
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (
+        profilePopupRef.current && !profilePopupRef.current.contains(e.target) &&
+        profileBtnRef.current && !profileBtnRef.current.contains(e.target)
+      ) {
+        setShowProfilePopup(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   return (
     <div className="flex h-screen bg-white font-sans overflow-hidden">
@@ -335,24 +409,71 @@ const Dashboard = ({ onLogout }) => {
 
         {/* User Profile at Bottom */}
         <div className="p-3">
-          <div className={`flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition-all ${!isSidebarOpen ? 'justify-center' : ''}`}>
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 flex-shrink-0">
-              <User className="w-4 h-4" />
+
+          {/* Profile Button */}
+          <button
+            ref={profileBtnRef}
+            onClick={() => setShowProfilePopup(p => !p)}
+            className={`w-full flex items-center p-2 rounded-lg hover:bg-gray-50 transition-all ${!isSidebarOpen ? 'justify-center' : ''}`}
+          >
+            <div className="w-8 h-8 rounded-full bg-[#099FAD] flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 overflow-hidden">
+              {profileData.avatarUrl
+                ? <img src={profileData.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                : getInitials(profileData.displayName)
+              }
             </div>
-            <div className={`flex-1 min-w-0 transition-all duration-300 overflow-hidden ${
-              isSidebarOpen ? 'opacity-100 max-w-xs' : 'opacity-0 max-w-0'
+            <div className={`min-w-0 transition-all duration-300 overflow-hidden ${
+              isSidebarOpen ? 'opacity-100 w-auto ml-3' : 'opacity-0 w-0 ml-0'
             }`}>
-              <p className="text-sm font-medium text-gray-700 truncate">Alice Gong</p>
-              <button 
-                onClick={onLogout} 
-                className="text-xs text-gray-500 hover:text-[#099FAD] transition-colors"
-              >
-                Log out
-              </button>
+              <p className="text-sm font-medium text-gray-700 truncate">{profileData.displayName}</p>
+              <p className="text-xs text-gray-400 truncate">{profileData.username}</p>
             </div>
-          </div>
+          </button>
         </div>
+
       </aside>
+
+      {/* Profile Popup — rendered outside aside so it's never clipped */}
+      {showProfilePopup && profileBtnRef.current && (
+        <div
+          ref={profilePopupRef}
+          className="fixed z-[100] bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden animate-scaleIn"
+          style={{
+            bottom: window.innerHeight - profileBtnRef.current.getBoundingClientRect().top + 8,
+            left: profileBtnRef.current.getBoundingClientRect().left,
+            width: 220,
+          }}
+        >
+          {/* Top — click to open Edit modal */}
+          <button
+            onClick={() => { setShowEditModal(true); setShowProfilePopup(false); setEditForm({...profileData}); }}
+            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors text-left"
+          >
+            <div className="w-8 h-8 rounded-full bg-[#099FAD] flex items-center justify-center text-white text-xs font-semibold flex-shrink-0 overflow-hidden">
+              {profileData.avatarUrl
+                ? <img src={profileData.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                : getInitials(profileData.displayName)
+              }
+            </div>
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-800 truncate">{profileData.displayName}</p>
+              <p className="text-xs text-gray-400 truncate">{profileData.username}</p>
+            </div>
+          </button>
+
+          <div className="h-px bg-gray-100 mx-3" />
+
+          {/* Log out */}
+          <button
+            onClick={onLogout}
+            className="w-full flex items-center gap-3 px-4 py-3 text-gray-600 hover:bg-gray-50 transition-colors text-left"
+          >
+            <LogOut className="w-4 h-4 flex-shrink-0" />
+            <span className="text-sm">Log out</span>
+          </button>
+        </div>
+      )}
+
 
 
       {/* --- MAIN CONTENT --- */}
@@ -792,6 +913,92 @@ const Dashboard = ({ onLogout }) => {
 
         </div>
       </main>
+      {/* --- EDIT PROFILE MODAL --- */}
+      {showEditModal && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+          <div className="bg-white rounded-2xl w-full max-w-md p-6 shadow-2xl animate-scaleIn">
+
+            {/* Header */}
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-lg font-semibold text-gray-900">Edit profile</h2>
+              <button onClick={handleCancelEdit} className="p-1 hover:bg-gray-100 rounded-full transition-colors">
+                <X className="w-5 h-5 text-gray-400" />
+              </button>
+            </div>
+
+            {/* Avatar */}
+            <div className="flex justify-center mb-6">
+              <div className="relative">
+                <div className="w-20 h-20 rounded-full bg-[#099FAD] flex items-center justify-center text-white text-2xl font-semibold overflow-hidden ring-2 ring-[#099FAD]/30">
+                  {editForm.avatarUrl
+                    ? <img src={editForm.avatarUrl} alt="avatar" className="w-full h-full object-cover" />
+                    : getInitials(editForm.displayName || profileData.displayName)
+                  }
+                </div>
+                {/* Camera button */}
+                <label className="absolute bottom-0 right-0 w-7 h-7 bg-white border border-gray-200 rounded-full flex items-center justify-center cursor-pointer shadow-sm hover:bg-gray-50 transition-colors">
+                  <Camera className="w-3.5 h-3.5 text-gray-600" />
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={handleAvatarChange}
+                  />
+                </label>
+              </div>
+            </div>
+
+            {/* File error */}
+            {avatarError && (
+              <p className="text-xs text-red-500 text-center -mt-3 mb-4">{avatarError}</p>
+            )}
+
+            {/* Fields */}
+            <div className="space-y-4 mb-6">
+              <div className="border border-gray-200 rounded-xl px-4 py-3 focus-within:border-[#099FAD] transition-colors">
+                <label className="text-xs text-gray-400 block mb-1">Display name</label>
+                <input
+                  type="text"
+                  value={editForm.displayName}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, displayName: e.target.value }))}
+                  className="w-full text-sm text-gray-800 focus:outline-none bg-transparent"
+                />
+              </div>
+              <div className="border border-gray-200 rounded-xl px-4 py-3 focus-within:border-[#099FAD] transition-colors">
+                <label className="text-xs text-gray-400 block mb-1">Username</label>
+                <input
+                  type="text"
+                  value={editForm.username}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, username: e.target.value }))}
+                  className="w-full text-sm text-gray-800 focus:outline-none bg-transparent"
+                />
+              </div>
+            </div>
+
+            <p className="text-xs text-gray-400 text-center mb-6">
+              Only JPG or PNG files allowed. Max size: 5MB.
+            </p>
+
+            {/* Buttons */}
+            <div className="flex gap-3">
+              <button
+                onClick={handleCancelEdit}
+                className="flex-1 border border-gray-200 text-gray-600 text-sm font-medium py-2.5 rounded-full hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                className="flex-1 bg-gray-900 text-white text-sm font-semibold py-2.5 rounded-full hover:bg-gray-700 transition-colors"
+              >
+                Save
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
