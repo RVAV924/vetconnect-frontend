@@ -1,46 +1,72 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-contract PetHealth {
+contract VetConnectPro {
+    address public admin;
+
+    enum DataType { HealthRecord, ConsentForm }
 
     struct Record {
         address uploader;
-        string ipfsHash;   // reference to IPFS
+        string ipfsHash;
+        DataType recordType; // Distinguishes between health logs and consent
         uint256 timestamp;
     }
 
     struct Bill {
-        address clinic;
-        uint amount;
+        address owner;   // The person who needs to pay
+        address clinic;  // The admin/clinic address
+        uint256 amount;
         bool paid;
     }
 
     Record[] public records;
     Bill[] public bills;
 
-    event RecordAdded(uint index, address uploader, string ipfsHash);
-    event BillCreated(uint index, address clinic, uint amount);
-    event BillPaid(uint index, address payer);
+    event RecordAdded(uint256 index, address uploader, string ipfsHash, DataType rType);
+    event BillCreated(uint256 index, address owner, uint256 amount);
+    event BillPaid(uint256 index, address payer);
 
-    // add a health record or consent form
-    function addRecord(string memory ipfsHash) public {
-        records.push(Record(msg.sender, ipfsHash, block.timestamp));
-        emit RecordAdded(records.length - 1, msg.sender, ipfsHash);
+    constructor() {
+        admin = msg.sender; // The person who deploys the contract is the Admin
     }
 
-    // create a bill
-    function createBill(uint amount) public {
-        bills.push(Bill(msg.sender, amount, false));
-        emit BillCreated(bills.length - 1, msg.sender, amount);
+    modifier onlyAdmin() {
+        require(msg.sender == admin, "Security Alert: Only Admin can perform this action");
+        _;
     }
 
-    // pay a bill
-    function payBill(uint index) public payable {
-        require(msg.value == bills[index].amount, "Wrong payment");
+    // 1. Add Health Records or Consent Forms
+    // In Remix, use 0 for HealthRecord and 1 for ConsentForm
+    function addRecord(string memory _ipfsHash, DataType _type) public {
+        records.push(Record(msg.sender, _ipfsHash, _type, block.timestamp));
+        emit RecordAdded(records.length - 1, msg.sender, _ipfsHash, _type);
+    }
+
+    // 2. Billing: Admin creates a bill for a specific pet owner
+    function createBill(address _owner, uint256 _amountInWei) public onlyAdmin {
+        bills.push(Bill(_owner, admin, _amountInWei, false));
+        emit BillCreated(bills.length - 1, _owner, _amountInWei);
+    }
+
+    // 3. Payments: Owner pays the specific bill index
+    function payBill(uint256 index) public payable {
+        require(index < bills.length, "Bill does not exist");
+        require(msg.sender == bills[index].owner, "This is not your bill");
+        require(msg.value == bills[index].amount, "Incorrect payment amount");
+        require(!bills[index].paid, "Bill already paid");
+
         bills[index].paid = true;
 
-    // Safe transfer
-    (bool success, ) = bills[index].clinic.call{ value: msg.value }("");
-    require(success, "Payment failed");
-    emit BillPaid(index, msg.sender);}
+        // Transfer funds to the clinic
+        (bool success, ) = bills[index].clinic.call{ value: msg.value }("");
+        require(success, "Transfer to clinic failed");
+
+        emit BillPaid(index, msg.sender);
+    }
+
+    // Helper function to see total records
+    function getRecordCount() public view returns (uint256) {
+        return records.length;
+    }
 }
