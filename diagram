@@ -1,0 +1,46 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+contract PetHealth {
+
+    struct Record {
+        address uploader;
+        string ipfsHash;   // reference to IPFS
+        uint256 timestamp;
+    }
+
+    struct Bill {
+        address clinic;
+        uint amount;
+        bool paid;
+    }
+
+    Record[] public records;
+    Bill[] public bills;
+
+    event RecordAdded(uint index, address uploader, string ipfsHash);
+    event BillCreated(uint index, address clinic, uint amount);
+    event BillPaid(uint index, address payer);
+
+    // add a health record or consent form
+    function addRecord(string memory ipfsHash) public {
+        records.push(Record(msg.sender, ipfsHash, block.timestamp));
+        emit RecordAdded(records.length - 1, msg.sender, ipfsHash);
+    }
+
+    // create a bill
+    function createBill(uint amount) public {
+        bills.push(Bill(msg.sender, amount, false));
+        emit BillCreated(bills.length - 1, msg.sender, amount);
+    }
+
+    // pay a bill
+    function payBill(uint index) public payable {
+        require(msg.value == bills[index].amount, "Wrong payment");
+        bills[index].paid = true;
+
+    // Safe transfer
+    (bool success, ) = bills[index].clinic.call{ value: msg.value }("");
+    require(success, "Payment failed");
+    emit BillPaid(index, msg.sender);}
+}
