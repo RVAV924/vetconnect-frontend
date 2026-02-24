@@ -4,18 +4,19 @@ pragma solidity ^0.8.0;
 contract VetConnectPro {
     address public admin;
 
+    // Categorizing data for better organization
     enum DataType { HealthRecord, ConsentForm }
 
     struct Record {
         address uploader;
         string ipfsHash;
-        DataType recordType; // Distinguishes between health logs and consent
+        DataType recordType; 
         uint256 timestamp;
     }
 
     struct Bill {
-        address owner;   // The person who needs to pay
-        address clinic;  // The admin/clinic address
+        address owner;   // The Pet Owner who pays
+        address clinic;  // The Admin/Clinic address
         uint256 amount;
         bool paid;
     }
@@ -28,45 +29,40 @@ contract VetConnectPro {
     event BillPaid(uint256 index, address payer);
 
     constructor() {
-        admin = msg.sender; // The person who deploys the contract is the Admin
+        admin = msg.sender; // The person who deploys becomes the Admin
     }
 
+    // Security Modifier: Prevents non-admins from creating bills
     modifier onlyAdmin() {
-        require(msg.sender == admin, "Security Alert: Only Admin can perform this action");
+        require(msg.sender == admin, "Security Alert: Access Denied");
         _;
     }
 
     // 1. Add Health Records or Consent Forms
-    // In Remix, use 0 for HealthRecord and 1 for ConsentForm
+    // In Remix: Use 0 for HealthRecord, 1 for ConsentForm
     function addRecord(string memory _ipfsHash, DataType _type) public {
         records.push(Record(msg.sender, _ipfsHash, _type, block.timestamp));
         emit RecordAdded(records.length - 1, msg.sender, _ipfsHash, _type);
     }
 
-    // 2. Billing: Admin creates a bill for a specific pet owner
+    // 2. Billing: Only Admin can issue bills to owners
     function createBill(address _owner, uint256 _amountInWei) public onlyAdmin {
         bills.push(Bill(_owner, admin, _amountInWei, false));
         emit BillCreated(bills.length - 1, _owner, _amountInWei);
     }
 
-    // 3. Payments: Owner pays the specific bill index
+    // 3. Payment: Verified transaction that transfers funds
     function payBill(uint256 index) public payable {
         require(index < bills.length, "Bill does not exist");
-        require(msg.sender == bills[index].owner, "This is not your bill");
-        require(msg.value == bills[index].amount, "Incorrect payment amount");
-        require(!bills[index].paid, "Bill already paid");
+        require(msg.sender == bills[index].owner, "Not your bill");
+        require(msg.value == bills[index].amount, "Incorrect amount");
+        require(!bills[index].paid, "Already paid");
 
         bills[index].paid = true;
 
-        // Transfer funds to the clinic
         (bool success, ) = bills[index].clinic.call{ value: msg.value }("");
-        require(success, "Transfer to clinic failed");
+        require(success, "Transfer failed");
 
         emit BillPaid(index, msg.sender);
-    }
-
-    // Helper function to see total records
-    function getRecordCount() public view returns (uint256) {
-        return records.length;
     }
 }
